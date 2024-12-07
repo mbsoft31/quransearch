@@ -1,7 +1,6 @@
 package quransearch
 
 import (
-	"math"
 	"sync"
 	"unsafe"
 )
@@ -51,7 +50,7 @@ func (bm *BoyerMoore) Search(text string, max int) []SearchMatch1 {
 			matches = append(matches, SearchMatch1{Offset: i + 1})
 			i += bm.patternLen * 2 // Skip overlapping matches.
 		} else {
-			i += int(math.Max(float64(bm.goodSuffixTable[lastIndex-j]), float64(bm.badCharTable[textBytes[i]])))
+			i += int(maxInt(bm.goodSuffixTable[lastIndex-j], bm.badCharTable[textBytes[i]]))
 		}
 	}
 	return matches
@@ -111,13 +110,13 @@ func suffixLength(pattern []byte, p int) int {
 	return length
 }
 
-// max returns the larger of two integers.
-//func max(a, b int) int {
-//	if a > b {
-//		return a
-//	}
-//	return b
-//}
+// maxInt returns the larger of two integers.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 // ParallelSearch performs parallel Boyer-Moore search for large texts.
 func (bm *BoyerMoore) ParallelSearch(text string, max int) []SearchMatch1 {

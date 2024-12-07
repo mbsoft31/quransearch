@@ -18,7 +18,7 @@ const (
 	METHOD_INDEX_OF    = 0
 	METHOD_BOYER_MOORE = 1
 	METHOD_REGEX       = 2
-	METHOD_DEFAULT     = METHOD_REGEX
+	METHOD_DEFAULT     = METHOD_BOYER_MOORE
 )
 
 var SurahName = [][]string{
@@ -241,6 +241,14 @@ func (qs *QuranSearch) Search(p string, max int) []AyaMatch {
 	case METHOD_INDEX_OF:
 		matches = qs.indexOfSearch(p, max, start)
 	case METHOD_BOYER_MOORE:
+		boyerMoore := NewBoyerMoore(p)
+		mats := boyerMoore.Search(qs.Quran, max)
+		for i, mat := range mats {
+			fmt.Printf("Match %d: %v\n", i, mat)
+			ayaStart := strings.LastIndex(qs.Quran[:mat.Offset], "|") + 1
+			ayaEnd := strings.Index(qs.Quran[mat.Offset:], "\n") + mat.Offset
+			fmt.Printf("Match %d: %v\n", i, qs.Quran[ayaStart:ayaEnd])
+		}
 		//matches = qs.boyerMooreSearch(p, max, start)
 	case METHOD_REGEX:
 		matches = qs.regexSearch(p, max, start)
