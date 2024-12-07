@@ -3,6 +3,7 @@ package quransearch
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -159,7 +160,12 @@ func (qs *QuranSearch) readFile(filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalf("Could not close file: %s", err.Error())
+		}
+	}(file)
 
 	var sb strings.Builder
 	scanner := bufio.NewScanner(file)
@@ -276,10 +282,10 @@ func (qs *QuranSearch) buildResults(matches []SearchMatch, plen int) []AyaMatch 
 	return results
 }
 
-func (qs *QuranSearch) getAyaSuffix(surah, aya int) string {
+func (qs *QuranSearch) GetAyaSuffix(surah, aya int) string {
 	return fmt.Sprintf(" \u200F[%s %d]", SurahName[surah-1][0], aya)
 }
 
-func (qs *QuranSearch) getAyaPrefix(surah, aya int) string {
+func (qs *QuranSearch) GetAyaPrefix(surah, aya int) string {
 	return fmt.Sprintf("[%s %d] ", SurahName[surah-1][0], aya)
 }
