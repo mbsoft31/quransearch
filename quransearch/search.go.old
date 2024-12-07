@@ -1,0 +1,154 @@
+package quransearch
+
+import (
+	"errors"
+	"os"
+	"strings"
+	"unicode"
+)
+
+// Enums and Constants
+type Rasm int
+
+const (
+	Imla Rasm = iota
+	ImlaMashkul
+	Uthmani
+)
+
+const (
+	DefSearchLimit = 10
+	MethodIndexOf  = 0
+	MethodRegex    = 1
+	MethodBoyer    = 2
+)
+
+type QuranSearch struct {
+	Quran         string
+	CurrentMethod int
+	SpecialCases  []SearchMatch1
+}
+
+// Factory Function for QuranSearch
+func NewQuranSearch(filePath string) (*QuranSearch, error) {
+	qs := &QuranSearch{
+		CurrentMethod: MethodIndexOf,
+	}
+
+	if err := qs.readFile(filePath); err != nil {
+		return nil, err
+	}
+
+	return qs, nil
+}
+
+// Read File and Populate Quran Text
+func (qs *QuranSearch) readFile(filePath string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	qs.Quran = string(data)
+	return nil
+}
+
+// One-Letter Special Case
+func (qs *QuranSearch) OneLetterSpecialCase(p string) bool {
+	if len(p) == 0 {
+		return false
+	}
+	var part = rune(p[0])
+	switch part {
+	case 'ص':
+		qs.SpecialCases = []SearchMatch1{{Offset: 335061}}
+	case 'ق':
+		qs.SpecialCases = []SearchMatch1{{Offset: 384642}}
+	case 'ن':
+		qs.SpecialCases = []SearchMatch1{{Offset: 421495}}
+	default:
+		return false
+	}
+	return true
+}
+
+// TwoLettersSpecialCase Two-Letter Special Case
+func (qs *QuranSearch) TwoLettersSpecialCase(p string) bool {
+	if len(p) < 2 {
+		return false
+	}
+	if p[:2] == "طه" {
+		qs.SpecialCases = []SearchMatch1{{Offset: 248381}}
+		return true
+	}
+	return false
+}
+
+// Search Method
+func (qs *QuranSearch) Search(phrase string, limit int) ([]SearchMatch1, error) {
+	if limit <= 0 {
+		limit = DefSearchLimit
+	}
+
+	var matches []SearchMatch1
+
+	// Handle special cases
+	if qs.OneLetterSpecialCase(phrase) || qs.TwoLettersSpecialCase(phrase) {
+		return qs.SpecialCases, nil
+	}
+
+	switch qs.CurrentMethod {
+	case MethodIndexOf:
+		matches = qs.searchIndexOf(phrase, limit)
+	case MethodRegex:
+		return nil, errors.New("regex search not implemented yet")
+	default:
+		return nil, errors.New("invalid search method")
+	}
+
+	return matches, nil
+}
+
+// Search using IndexOf
+func (qs *QuranSearch) searchIndexOf(phrase string, limit int) []SearchMatch1 {
+	var matches []SearchMatch1
+	lowerQuran := strings.ToLower(qs.Quran)
+	lowerPhrase := strings.ToLower(phrase)
+	offset := 0
+
+	for {
+		index := strings.Index(lowerQuran[offset:], lowerPhrase)
+		if index == -1 || len(matches) >= limit {
+			break
+		}
+		matches = append(matches, SearchMatch1{Offset: offset + index})
+		offset += index + len(lowerPhrase)
+	}
+
+	return matches
+}
+
+// Diacritic Removal
+func removeDiacritics(input string) string {
+	var builder strings.Builder
+	for _, r := range input {
+		if !unicode.Is(unicode.Mn, r) { // Mn: Nonspacing Mark
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
+}
+
+// SetSearchMethod Change Search Method
+func (qs *QuranSearch) SetSearchMethod(method int) error {
+	if method != MethodIndexOf && method != MethodRegex {
+		return errors.New("invalid search method")
+	}
+	qs.CurrentMethod = method
+	return nil
+}
+
+// GetFilePath Helper Functions for File Paths (if needed)
+func GetFilePath(relativePath string) (string, error) {
+	// For simplicity, assuming files are in the current working directory
+	return relativePath, nil
+}
