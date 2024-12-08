@@ -1,6 +1,7 @@
 package quransearch
 
 import (
+	"encoding/xml"
 	"strings"
 	"time"
 )
@@ -30,4 +31,24 @@ type AyaMatch struct {
 	SLen      int
 	Indexes   []int
 	PreSpaces int
+}
+
+type Quran struct {
+	XMLName  xml.Name `xml:"quran"`
+	Language string   `xml:"language,attr"`
+	Version  string   `xml:"version,attr"`
+	Source   string   `xml:"source,attr"`
+	Surahs   []Surah  `xml:"surah"`
+}
+
+type Surah struct {
+	No        int    `xml:"no,attr"`
+	Name      string `xml:"name,attr"`
+	Bismillah bool   `xml:"bismillah,attr"`
+	Ayahs     []Ayah `xml:"ayat"`
+}
+
+type Ayah struct {
+	No   int    `xml:"no,attr"`
+	Text string `xml:"text,attr"`
 }
