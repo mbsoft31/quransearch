@@ -2,7 +2,6 @@ package quransearch
 
 import (
 	"fmt"
-	"regexp"
 	_ "regexp"
 	"strconv"
 	"strings"
@@ -287,57 +286,6 @@ func (sm *SearchMatch) setSurahNumber(quran string) int {
 	sm.Surah, _ = strconv.Atoi(quran[sm.Begin:n])
 	n++
 	return n
-}
-
-// NewSearchMatchWithoutTime Overloaded constructor without time
-func NewSearchMatchWithoutTime(quran string, i int) *SearchMatch {
-	return NewSearchMatch(quran, i, 0)
-}
-
-// NewSearchMatchFromMatcher Constructor using regex Matcher
-func NewSearchMatchFromMatcher(m *regexp.Regexp, input string, t time.Duration) *SearchMatch {
-	sm := &SearchMatch{
-		Time: t,
-	}
-
-	// RegEx matching patterns are always limited to '\|([0-9]+)\|([0-9]+)\|(.*(pattern).*)\n'
-	matches := m.FindStringSubmatchIndex(input)
-	if matches == nil {
-		return nil
-	}
-
-	sm.Surah, _ = strconv.Atoi(input[matches[2]:matches[3]])
-	sm.Aya, _ = strconv.Atoi(input[matches[4]:matches[5]])
-
-	sm.Begin = matches[6]
-	sm.End = matches[7] + 1
-
-	sm.Index = matches[8]
-
-	sm.Word = strings.LastIndex(input[:sm.Index], " ") + 1
-	if sm.Word == 0 || sm.Word < sm.Begin {
-		sm.Word = sm.Begin
-	}
-
-	return sm
-}
-
-// NewSearchMatchFromMatcherWithoutTime Overloaded constructor without time using regex Matcher
-func NewSearchMatchFromMatcherWithoutTime(m *regexp.Regexp, input string) *SearchMatch {
-	return NewSearchMatchFromMatcher(m, input, 0)
-}
-
-// NewSearchMatchCopy Copy constructor
-func NewSearchMatchCopy(s *SearchMatch) *SearchMatch {
-	return &SearchMatch{
-		Index: s.Index,
-		Time:  s.Time,
-		Begin: s.Begin,
-		End:   s.End,
-		Word:  s.Word,
-		Surah: s.Surah,
-		Aya:   s.Aya,
-	}
 }
 
 // Print method

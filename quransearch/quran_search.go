@@ -2,6 +2,7 @@ package quransearch
 
 import (
 	"bufio"
+	"embed"
 	"fmt"
 	"log"
 	"os"
@@ -13,13 +14,18 @@ import (
 const (
 	DEF_SEARCH_LIMIT   = 10
 	DEF_BUFFER_SIZE    = 1024 * 4
-	MIN_PATTERN_LEN    = 3
+	MIN_PATTERN_LEN    = 1
 	MAX_INDEX_OF_LEN   = 10
 	METHOD_INDEX_OF    = 0
 	METHOD_BOYER_MOORE = 1
 	METHOD_REGEX       = 2
+	METHOD_BRUTE_FORCE = 3
 	METHOD_DEFAULT     = METHOD_REGEX
 )
+
+/*
+	TODO: Fix the Boyer Moore and IndexOf methods they giving wrong results
+*/
 
 type QuranSearch struct {
 	Reader        *bufio.Reader
@@ -36,6 +42,16 @@ func NewQuranSearch(filePath string) (*QuranSearch, error) {
 	if err != nil {
 		return nil, err
 	}
+	return qs, nil
+}
+
+func NewQuranSearchWithText(quranFile embed.FS) (*QuranSearch, error) {
+	qs := &QuranSearch{CurrentMethod: METHOD_DEFAULT}
+	file, err := quranFile.ReadFile("data/quran.txt")
+	if err != nil {
+		return nil, fmt.Errorf("error reading quran file: %v", err)
+	}
+	qs.Quran = string(file)
 	return qs, nil
 }
 
@@ -65,6 +81,38 @@ func (qs *QuranSearch) readFile(filePath string) error {
 
 	qs.Quran = sb.String()
 	return nil
+}
+
+func (qs *QuranSearch) Search(p string, max int) []AyaMatch {
+	if len(p) < MIN_PATTERN_LEN {
+		return nil
+	}
+
+	if qs.oneLetterSpecialCase(p) || qs.twoLettersSpecialCase(p) {
+		return qs.buildResults(qs.SpecialCases, len(p))
+	}
+
+	var matches []SearchMatch
+
+	switch qs.CurrentMethod {
+	case METHOD_BOYER_MOORE:
+		boyerMoore := BoyerMooreMethod{}
+		matches = boyerMoore.Search(qs.Quran, p, max)
+	case METHOD_REGEX:
+		regex := RegexMethod{}
+		matches = regex.Search(qs.Quran, p, max)
+	case METHOD_BRUTE_FORCE:
+		bruteForce := BruteForceMethod{}
+		matches = bruteForce.Search(qs.Quran, p, max)
+	case METHOD_INDEX_OF:
+		indexOf := indexOfMethod{}
+		matches = indexOf.Search(qs.Quran, p, max)
+	default:
+		indexOf := indexOfMethod{}
+		matches = indexOf.Search(qs.Quran, p, max)
+	}
+
+	return qs.buildResults(matches, len(p))
 }
 
 func (qs *QuranSearch) oneLetterSpecialCase(p string) bool {
@@ -112,40 +160,6 @@ func (qs *QuranSearch) twoLettersSpecialCase(p string) bool {
 	return true
 }
 
-func (qs *QuranSearch) Search(p string, max int) []AyaMatch {
-	if len(p) < MIN_PATTERN_LEN {
-		return nil
-	}
-
-	if qs.oneLetterSpecialCase(p) || qs.twoLettersSpecialCase(p) {
-		return qs.buildResults(qs.SpecialCases, len(p))
-	}
-
-	var matches []SearchMatch
-	start := time.Now()
-
-	switch qs.CurrentMethod {
-	case METHOD_INDEX_OF:
-		matches = qs.indexOfSearch(p, max, start)
-	case METHOD_BOYER_MOORE:
-		boyerMoore := NewBoyerMoore(p)
-		mats := boyerMoore.Search(qs.Quran, max)
-		for i, mat := range mats {
-			fmt.Printf("Match %d: %v\n", i, mat)
-			ayaStart := strings.LastIndex(qs.Quran[:mat.Offset], "|") + 1
-			ayaEnd := strings.Index(qs.Quran[mat.Offset:], "\n") + mat.Offset
-			fmt.Printf("Match %d: %v\n", i, qs.Quran[ayaStart:ayaEnd])
-		}
-		//matches = qs.boyerMooreSearch(p, max, start)
-	case METHOD_REGEX:
-		matches = qs.regexSearch(p, max, start)
-	default:
-		matches = qs.indexOfSearch(p, max, start)
-	}
-
-	return qs.buildResults(matches, len(p))
-}
-
 func (qs *QuranSearch) indexOfSearch(p string, max int, start time.Time) []SearchMatch {
 	var matches []SearchMatch
 	index := 0
@@ -161,7 +175,7 @@ func (qs *QuranSearch) indexOfSearch(p string, max int, start time.Time) []Searc
 }
 
 func (qs *QuranSearch) regexSearch(p string, max int, start time.Time) []SearchMatch {
-	var matches []SearchMatch
+	var matches = make([]SearchMatch, 0)
 	re := regexp.MustCompile(p)
 	for _, match := range re.FindAllStringIndex(qs.Quran, max) {
 		matches = append(matches, *NewSearchMatch(qs.Quran, match[0], time.Since(start)))
@@ -170,7 +184,7 @@ func (qs *QuranSearch) regexSearch(p string, max int, start time.Time) []SearchM
 }
 
 func (qs *QuranSearch) buildResults(matches []SearchMatch, plen int) []AyaMatch {
-	var results []AyaMatch
+	var results = make([]AyaMatch, 0)
 	for _, match := range matches {
 		results = append(results, *NewAyaMatch(qs.Quran, qs.AyaBegin, match, plen))
 	}

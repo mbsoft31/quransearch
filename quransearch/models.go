@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Structs and Models
@@ -11,6 +12,45 @@ import (
 // SearchMatch1 search match
 type SearchMatch1 struct {
 	Offset int
+}
+
+// SearchMethod is an interface for searching methods
+type SearchMethod interface {
+	Search(text, pattern string, max int) []SearchMatch
+}
+
+type indexOfMethod struct{}
+
+func (i indexOfMethod) Search(text, pattern string, max int) []SearchMatch {
+	start := time.Now()
+	var matches []SearchMatch
+	index := 0
+	for len(matches) < max {
+		println("check index = ", index)
+		newIndex := strings.Index(text[index:], pattern)
+		if newIndex == -1 {
+			break
+		}
+		println("index = ", newIndex)
+		matches = append(matches, *NewSearchMatch(text, newIndex, time.Since(start)))
+		index += newIndex + utf8.RuneCountInString(pattern)
+		println("new index = ", index)
+	}
+	return matches
+}
+
+// RegexMethod implements the SearchMethod interface
+type RegexMethod struct{}
+
+// BruteForceMethod implements the SearchMethod interface
+type BruteForceMethod struct{}
+
+// BoyerMooreMethod implements the Boyer-Moore string search algorithm
+type BoyerMooreMethod struct {
+	Pattern       string
+	BadCharacter  []int
+	GoodSuffix    []int
+	PatternLength int
 }
 
 type SearchMatch struct {

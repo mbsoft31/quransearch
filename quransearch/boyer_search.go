@@ -1,156 +1,101 @@
 package quransearch
 
 import (
-	"sync"
-	"unsafe"
+	"time"
+	"unicode/utf8"
 )
 
-// BoyerMoore represents the optimized Boyer-Moore search algorithm.
-type BoyerMoore struct {
-	pattern         []byte
-	badCharTable    []int
-	goodSuffixTable []int
-	patternLen      int
-}
+// Search searches for occurrences of the pattern in the given text
+func (bm *BoyerMooreMethod) Search(text, pattern string, max int) []SearchMatch {
+	bm.Pattern = pattern
+	bm.PatternLength = utf8.RuneCountInString(pattern)
+	bm.BadCharacter = bm.makeBadCharacterShifts()
+	bm.GoodSuffix = bm.makeGoodSuffixShifts()
 
-// NewBoyerMoore initializes a BoyerMoore instance.
-func NewBoyerMoore(pattern string) *BoyerMoore {
-	p := []byte(pattern)
-	return &BoyerMoore{
-		pattern:         p,
-		badCharTable:    makeBadCharTable(p),
-		goodSuffixTable: makeGoodSuffixTable(p),
-		patternLen:      len(p),
+	var matches []SearchMatch
+	if bm.PatternLength == 0 {
+		return matches
 	}
-}
 
-// Search performs the Boyer-Moore search.
-func (bm *BoyerMoore) Search(text string, max int) []SearchMatch1 {
 	if max <= 0 {
-		max = int(^uint(0) >> 1) // Set max to the largest int value.
+		max = int(^uint(0) >> 1) // Max value for int
 	}
 
-	textBytes := *(*[]byte)(unsafe.Pointer(&text)) // Direct byte operations.
-	textLen := len(textBytes)
-	if bm.patternLen == 0 || textLen < bm.patternLen {
-		return nil
-	}
+	start := time.Now()
 
-	matches := make([]SearchMatch1, 0, max)
-	lastIndex := bm.patternLen - 1
-	i := lastIndex
+	textLength := utf8.RuneCountInString(text)
+	i := bm.PatternLength - 1
 
-	for i < textLen && len(matches) < max {
-		j := lastIndex
-		for j >= 0 && bm.pattern[j] == textBytes[i] {
+	for i < textLength && len(matches) < max {
+		j := bm.PatternLength - 1
+		for j >= 0 && bm.Pattern[j] == text[i] {
 			i--
 			j--
 		}
-		if j < 0 { // Full match found.
-			matches = append(matches, SearchMatch1{Offset: i + 1})
-			i += bm.patternLen * 2 // Skip overlapping matches.
+		if j < 0 {
+			match := NewSearchMatch(text, i+1, time.Since(start))
+			matches = append(matches, *match)
+			i += bm.PatternLength * 2
 		} else {
-			i += int(maxInt(bm.goodSuffixTable[lastIndex-j], bm.badCharTable[textBytes[i]]))
+			i += maxInt(bm.GoodSuffix[bm.PatternLength-1-j], bm.BadCharacter[text[i]])
 		}
 	}
+
 	return matches
 }
 
-// makeBadCharTable constructs the bad character shift table.
-func makeBadCharTable(pattern []byte) []int {
-	alphabetSize := 256 // Extended ASCII.
-	table := make([]int, alphabetSize)
-	patternLen := len(pattern)
+func (bm *BoyerMooreMethod) makeBadCharacterShifts() []int {
+	const AlphabetSize = 'ي' + 1
 
-	for i := 0; i < alphabetSize; i++ {
-		table[i] = patternLen
+	badCS := make([]int, AlphabetSize)
+	for i := 0; i < AlphabetSize; i++ {
+		badCS[i] = bm.PatternLength
 	}
-	for i := 0; i < patternLen-1; i++ {
-		table[pattern[i]] = patternLen - 1 - i
+	for i := 0; i < bm.PatternLength-1; i++ {
+		badCS[bm.Pattern[i]] = bm.PatternLength - 1 - i
 	}
-	return table
+	return badCS
 }
 
-// makeGoodSuffixTable constructs the good suffix shift table.
-func makeGoodSuffixTable(pattern []byte) []int {
-	patternLen := len(pattern)
-	table := make([]int, patternLen)
-	lastPrefixPos := patternLen
+func (bm *BoyerMooreMethod) makeGoodSuffixShifts() []int {
+	goodSuffix := make([]int, bm.PatternLength)
+	lastPrefixPosition := bm.PatternLength
 
-	for i := patternLen - 1; i >= 0; i-- {
-		if isPrefix(pattern, i+1) {
-			lastPrefixPos = i + 1
+	for i := bm.PatternLength - 1; i >= 0; i-- {
+		if bm.isPrefix(i + 1) {
+			lastPrefixPosition = i + 1
 		}
-		table[patternLen-1-i] = lastPrefixPos - i + patternLen - 1
+		goodSuffix[bm.PatternLength-1-i] = lastPrefixPosition - i + bm.PatternLength - 1
 	}
-	for i := 0; i < patternLen-1; i++ {
-		slen := suffixLength(pattern, i)
-		table[slen] = patternLen - 1 - i + slen
+
+	for i := 0; i < bm.PatternLength-1; i++ {
+		slen := bm.suffixLength(i)
+		goodSuffix[slen] = bm.PatternLength - 1 - i + slen
 	}
-	return table
+
+	return goodSuffix
 }
 
-// isPrefix checks if pattern[p:] is a prefix of pattern.
-func isPrefix(pattern []byte, p int) bool {
-	patternLen := len(pattern)
-	for i, j := p, 0; i < patternLen; i, j = i+1, j+1 {
-		if pattern[i] != pattern[j] {
+func (bm *BoyerMooreMethod) isPrefix(p int) bool {
+	for i, j := p, 0; i < bm.PatternLength; i, j = i+1, j+1 {
+		if bm.Pattern[i] != bm.Pattern[j] {
 			return false
 		}
 	}
 	return true
 }
 
-// suffixLength calculates the maximum length of a substring ending at p that is also a suffix.
-func suffixLength(pattern []byte, p int) int {
+func (bm *BoyerMooreMethod) suffixLength(p int) int {
 	length := 0
-	for i, j := p, len(pattern)-1; i >= 0 && pattern[i] == pattern[j]; i, j = i-1, j-1 {
+	for i, j := p, bm.PatternLength-1; i >= 0 && bm.Pattern[i] == bm.Pattern[j]; i, j = i-1, j-1 {
 		length++
 	}
 	return length
 }
 
-// maxInt returns the larger of two integers.
 func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
-}
-
-// ParallelSearch performs parallel Boyer-Moore search for large texts.
-func (bm *BoyerMoore) ParallelSearch(text string, max int) []SearchMatch1 {
-	const chunkSize = 10000
-	textBytes := *(*[]byte)(unsafe.Pointer(&text))
-	textLen := len(textBytes)
-	numChunks := (textLen + chunkSize - 1) / chunkSize
-
-	var wg sync.WaitGroup
-	matchesChan := make(chan []SearchMatch1, numChunks)
-
-	for i := 0; i < numChunks; i++ {
-		start := i * chunkSize
-		end := start + chunkSize
-		if end > textLen {
-			end = textLen
-		}
-
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-			matchesChan <- bm.Search(string(textBytes[start:end]), max)
-		}(start, end)
-	}
-
-	wg.Wait()
-	close(matchesChan)
-
-	var matches []SearchMatch1
-	for matchList := range matchesChan {
-		matches = append(matches, matchList...)
-		if len(matches) >= max {
-			break
-		}
-	}
-	return matches
 }
